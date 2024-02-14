@@ -1,0 +1,10 @@
+[fit]
+target_type="K"
+dim=9
+last_t= 5001
+t_spacing=1
+max_steps=300
+
+[fit.GN]
+reg_fun ="tikhonov"
+reg_param =0.01

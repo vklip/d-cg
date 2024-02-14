@@ -1,0 +1,61 @@
+#Default configuration for iomk_lib. 
+
+[general] #General parameters, used by both iomk_gn and fit
+target_file = "" # Definetly provide this, for the ith target the target file name is target_file. (Multiple targets will be supported in later updates.)
+# How to interpret the target array. 
+#Options: {"G": integrated memory kernel (in frequency units), "K":memory kernel (in frequency^2 units) }
+target_type="G"
+function_type="full_matrix" # Defines the functional form of the memory kernel. Options: {"full_matrix", "dosz"}.
+dim = 7
+Amat_file= "" # initial guess
+p_guess = [] # Initial guess taken from parameters. Up to now assumes "normalized" parameters. Likely not needed.
+t_spacing=1 # 
+last_t = 0 # Default 0:  takes all available data otherwise combined with t_spacing target[:t_spacing:last_t]
+
+[iomk] #Some options of this section have to be set manually, as no meaningful defaults are can be provided
+targets = [""] # This can be kept, if only one target is optimized. The target file name is then target_file
+a_file = "" # If this is not provided for IOMK(-GN), effects of conservative forces are ignored. IOMK update then reads \tilde{G}_{i+1} = \frac{G_{tgt}}{G_i}\tilde{G}{i}.
+index_files = [] # This can be kept, if only one target is optimized and all particles in trajectory are equivalent
+sim_files = [] # List of filenames to be copied in every iteration
+method = "GN" #Options: {"GN": run IOMK-GN, "N": run ('normal') IOMK. Relies on fitting parameters defined below.}
+start_it = 0 # Default 0 means, start from scratch. If > 0, expects Amatrix in  it{start_it}_mem_fit to exist  and will take matrix from there as initial guess
+max_it = 7 # Maximal number of iterations to run (stops after start_it + max_it)
+n_traj = 1 #  When several (independent but otherwise equivalent) trajectories are produced in one iteration, n_traj has to set to average over all trajectories. 
+lmp = "lmp -i lmp.in" # Command used to run simulations. When using mpirun: e.g. mpirun -np 8 lmp -i lmp.in.
+remove_traj = false # Delete trajectories between iterations.
+tol_r = 1e-7 # Tolerance for IOMK(-GN). Likeley has to be chosen smaller then the equivalent parameter in "fit", as every iteration involves simulations.
+
+# Parameters for iomk_lib.iomk_gn._update_a_gn. 
+[iomk.GN] 
+reg_fun =  "adaptive" # Currently implemented options {"adaptive", "tikhonov"}
+reg_param = 1.0 # Default of 1.0 seems to be a good choice for "adaptive". For "tikhonov" a smaller value might be better.
+opt_reg = true # Test scaled regularization matrix using an estimate for the resulting memory kernel.
+scale_reg = [0.01,1.0,100] # [minimal scaling, maximum scaling (values > 1 might lead to slower convergence), number of scaled regularization matrices] to test when opt_reg==true
+
+# Default values for fit_memory.py. Can be tweaked if neccesery. 
+[fit] # 
+# What method to use for fitting. 
+#Options: {"GN": Gauss-Newton scheme. Additional parameters read from [fit.GN],
+#"scipy": Wrapped use of scipy.optimize.curve_fit with bounds. Furter options are forwarded via [fit.scipy.kwargs]}
+fit_type="GN" 
+output_folder="" #Folder name for output. Defaults to  target_fil+"_fit"
+tol_r=1e-7 # Tolerance for for fitting. Average squared residue in normalized representation.
+max_steps= 100 # Stop optimization after max_steps.
+
+# Parameters for iomk_lib._fit_tools._fit_GN. 
+[fit.GN] 
+reg_fun =  "adaptive"  # Currently implemented options {"adaptive", "tikhonov"}
+reg_param = 1 # Regularization parameter used by reg_fun.
+
+[fit.GN.kwargs] # In principle allow for additional arguments.
+
+[fit.scipy.kwargs] # In principle allow for additional arguments. If scipy.optimize.curve_fit understands it, you can add it.
+
+# Parameters for scipy.optimize._numdiff.approx_derivative, used by _fit_GN and _fit_scipy for fitting, and by _update_a_gn for IOMK-GN. The defaults should working fine as long as normalized full_matrix is used. Not as well tested for dosz.
+[jac] 
+method="2-point" # By default, use 2-point differentiation. Available: {"2-point", "3-point", "cs", callable} (see scipy documentation).
+bounds=[1e-15, inf] # Bounds to be considered in evaluation of finite differences. 
+abs_step=1e-5
+#rel_step=""  currently not supported in top level functions
+
+

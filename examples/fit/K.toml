@@ -1,0 +1,10 @@
+[fit]
+target_type="K"
+dim=7
+last_t= 1001
+t_spacing=1
+max_steps=300
+
+
+
+

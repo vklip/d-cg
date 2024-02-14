@@ -1,0 +1,10 @@
+[fit]
+target_type="G"
+dim=7
+last_t= 5001
+t_spacing=1
+max_steps=300
+
+
+
+

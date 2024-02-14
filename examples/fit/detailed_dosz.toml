@@ -1,0 +1,10 @@
+[fit]
+target_type="K"
+dim=17
+last_t= 3001
+t_spacing=1
+max_steps=3000
+function_type="dosz"
+tol_r = 1e-11
+
+
