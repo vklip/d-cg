@@ -66,6 +66,8 @@ def _fit_GN(
     while av_sq_res > tol_r and count < max_steps:
         # Provide parameters for approx_derivative.
         # Predefined values in this function should be fine for normalized problems and descent constraints
+        print(jac_kwargs)
+        print(p0)
         J = approx_derivative(func_w, p0, **jac_kwargs)
         b = np.matmul(J.transpose(), r)
         A = np.matmul(J.transpose(), J)

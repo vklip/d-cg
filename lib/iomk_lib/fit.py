@@ -23,6 +23,7 @@ def fit(
     Amat_file="",
     p_guess=[],
     tol_r=1e-7,
+    jac_kwargs={},
     **kwargs,
 ):
     """Main function to directly extract a drift matrix for the auxiliary
@@ -81,7 +82,7 @@ def fit(
         dim_method = wrapped_methods["get_dim"]
         apply_constraints = wrapped_methods["constraints"]
         write_a_matrix = wrapped_methods["write_a_matrix"]
-
+    print(function_type)
     # Read, crop and normalize target
     target = np.loadtxt(target_file)
     if last_t == 0:
@@ -111,7 +112,7 @@ def fit(
     else:
         print("No initial guess for parameters provided. Using generic initial guess")
         p_guess = guess_mat(dim, len(target_norm[0]) - 1)
-
+        print(p_guess)
     # Generate function wrapper
     func = make_func(dim)
     func_w = _wrap_func(func, target_norm[0])
@@ -126,6 +127,16 @@ def fit(
         pass
 
     # Preparation steps finished, run main function
+    dt = target_norm[0][1]
+    fit_out = np.zeros((2, 3 * len(target_norm[0])))
+    fit_out[0] = np.arange(len(fit_out[0])) * dt
+    fit_out[1] = func(fit_out[0], p_guess)
+    fit_out[0] *= renorm[0]
+    fit_out[1] *= renorm[1]
+
+    if target_type == "K":
+        fit_out[1] /= renorm[0]
+    np.savetxt(f"{output_folder}/fit_start", fit_out.T)
     results = fit_func(
         (func_w, func),
         target_norm,
@@ -135,6 +146,7 @@ def fit(
         output_folder=output_folder,
         max_steps=max_steps,
         tol_r=tol_r,
+        jac_kwargs=jac_kwargs,
         **kwargs,
     )
 

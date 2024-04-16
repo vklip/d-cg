@@ -2,7 +2,6 @@ from scipy.fftpack import fft, ifft, ifftshift
 from scipy.integrate import cumtrapz
 import scipy.optimize
 from numba import njit
-import h5py
 import numpy as np
 
 __all__ = [
@@ -26,6 +25,18 @@ __all__ = [
     "normalize_k",
     "write_a_matrix_full",
     "write_a_matrix_dosz",
+    "_mat_to_param_block",
+    "_param_to_mat_block",
+    "_get_dim_block",
+    "write_a_matrix_block",
+    "make_block_function",
+    "make_block_function_k",
+    "_mat_to_param_block2",
+    "_param_to_mat_block2",
+    "_get_dim_block2",
+    "write_a_matrix_block2",
+    "make_block2_function",
+    "make_block2_function_k",
 ]
 
 
@@ -47,6 +58,54 @@ def _get_dim_full(n):
     elif not dim / int(dim) == 1:
         raise ValueError(
             f"Invlid number of parameters for full matrix: resulting dimensionality is non-integer {dim}."
+        )
+    else:
+        dim = int(dim)
+    return dim
+
+
+def _get_dim_block(n):
+    """get dimension of a drift matrix from number of parameters
+
+    Args:
+        n (_type_): _description_
+
+    Returns:
+        int:  Dimension of  drift matrix
+    """
+
+    dim = n / 2 + 1
+    if n < 4:
+        raise ValueError(
+            "Invlid number of parameters for 2x2 block matrix: choose n >= 4!"
+        )
+    elif not dim / int(dim) == 1:
+        raise ValueError(
+            f"Invlid number of parameters for 2x2 block matrix matrix: resulting dimensionality is non-integer {dim}."
+        )
+    else:
+        dim = int(dim)
+    return dim
+
+
+def _get_dim_block2(n):
+    """get dimension of a drift matrix from number of parameters
+
+    Args:
+        n (_type_): _description_
+
+    Returns:
+        int:  Dimension of  drift matrix
+    """
+
+    dim = n / 5 * 2 + 1
+    if n < 5:
+        raise ValueError(
+            "Invlid number of parameters for 2x2 block matrix: choose n >= 4!"
+        )
+    elif not dim / int(dim) == 1:
+        raise ValueError(
+            f"Invlid number of parameters for 2x2 block matrix matrix: resulting dimensionality is non-integer {dim}."
         )
     else:
         dim = int(dim)
@@ -142,6 +201,155 @@ def make_a_mat_function(n):
         gt = (A_xy @ A_yy_inv @ A_xy.transpose()) * np.ones(nt)
         _calc_gt(gt, A_xy, A_yy_inv, A_yy_exp, nt, A_list)
         return gt
+
+    return func
+
+
+def make_block_function(n):
+    """Generate Function to evaluate integrated memory kernel from time series and parameters.
+
+    Args:
+        n (Integer): Dimension of drift matrix (n times n)
+
+    Returns:
+        callable:
+    """
+    A_list = np.zeros((1, 1, 1))
+    counter = [0]
+
+    def func(time, param):
+        dt = time[1] - time[0]
+        nt = len(time)
+        amat = _param_to_mat_block(param)
+        # np.savetxt(f"temp_amat{counter[0]}", amat)
+        counter[0] = counter[0] + 1
+        assert n == len(amat)
+        A_xy = amat[0, 1:]
+        A_yy = amat[1:, 1:]
+        A_yy_inv = np.linalg.inv(A_yy)
+        A_yy_exp = scipy.linalg.expm(-A_yy * dt)
+        if (
+            A_list.shape[0] != nt
+            or A_list.shape[1] != A_yy_exp.shape[0]
+            or A_list.shape[2] != A_yy_exp.shape[1]
+        ):
+            print("resizing A_list")
+            A_list.resize(
+                (nt, A_yy_exp.shape[0], A_yy_exp.shape[1]), refcheck=False
+            )  # added refcheck = False to prevent error massage on some machines.
+        gt = (A_xy @ A_yy_inv @ A_xy.transpose()) * np.ones(nt)
+        _calc_gt(gt, A_xy, A_yy_inv, A_yy_exp, nt, A_list)
+        return gt
+
+    return func
+
+
+def make_block2_function(n):
+    """Generate Function to evaluate integrated memory kernel from time series and parameters.
+
+    Args:
+        n (Integer): Dimension of drift matrix (n times n)
+
+    Returns:
+        callable:
+    """
+    A_list = np.zeros((1, 1, 1))
+    counter = [0]
+
+    def func(time, param):
+        dt = time[1] - time[0]
+        nt = len(time)
+        amat = _param_to_mat_block2(param)
+        # np.savetxt(f"temp_amat{counter[0]}", amat)
+        counter[0] = counter[0] + 1
+        assert n == len(amat)
+        A_xy = amat[0, 1:]
+        A_yy = amat[1:, 1:]
+        A_yy_inv = np.linalg.inv(A_yy)
+        A_yy_exp = scipy.linalg.expm(-A_yy * dt)
+        if (
+            A_list.shape[0] != nt
+            or A_list.shape[1] != A_yy_exp.shape[0]
+            or A_list.shape[2] != A_yy_exp.shape[1]
+        ):
+            print("resizing A_list")
+            A_list.resize(
+                (nt, A_yy_exp.shape[0], A_yy_exp.shape[1]), refcheck=False
+            )  # added refcheck = False to prevent error massage on some machines.
+        gt = (A_xy @ A_yy_inv @ A_xy.transpose()) * np.ones(nt)
+        _calc_gt(gt, A_xy, A_yy_inv, A_yy_exp, nt, A_list)
+        return gt
+
+    return func
+
+
+def make_block_function_k(n):
+    """Generate Function to evaluate memory kernel (not integrated) from time series and parameters.
+
+    Args:
+        n (Integer): Dimension of drift matrix (n times n)
+
+    Returns:
+        callable:
+    """
+    A_list = np.zeros((1, 1, 1))
+
+    def func(time, param):
+        dt = time[1] - time[0]
+        nt = len(time)
+        amat = _param_to_mat_block(param)
+        assert n == len(amat)
+        A_xy = amat[0, 1:]
+        A_yy = amat[1:, 1:]
+        A_yy_exp = scipy.linalg.expm(-A_yy * dt)
+        if (
+            A_list.shape[0] != nt
+            or A_list.shape[1] != A_yy_exp.shape[0]
+            or A_list.shape[2] != A_yy_exp.shape[1]
+        ):
+            print("resizing A_list")
+            A_list.resize(
+                (nt, A_yy_exp.shape[0], A_yy_exp.shape[1]), refcheck=False
+            )  # added refcheck = False to prevent error massage on some machines.
+        kt = np.zeros(nt)
+        _calc_kt(kt, A_xy, A_yy_exp, nt, A_list)
+        return kt
+
+    return func
+
+
+# free matrix for K
+def make_block2_function_k(n):
+    """Generate Function to evaluate memory kernel (not integrated) from time series and parameters.
+
+    Args:
+        n (Integer): Dimension of drift matrix (n times n)
+
+    Returns:
+        callable:
+    """
+    A_list = np.zeros((1, 1, 1))
+
+    def func(time, param):
+        dt = time[1] - time[0]
+        nt = len(time)
+        amat = _param_to_mat_block2(param)
+        assert n == len(amat)
+        A_xy = amat[0, 1:]
+        A_yy = amat[1:, 1:]
+        A_yy_exp = scipy.linalg.expm(-A_yy * dt)
+        if (
+            A_list.shape[0] != nt
+            or A_list.shape[1] != A_yy_exp.shape[0]
+            or A_list.shape[2] != A_yy_exp.shape[1]
+        ):
+            print("resizing A_list")
+            A_list.resize(
+                (nt, A_yy_exp.shape[0], A_yy_exp.shape[1]), refcheck=False
+            )  # added refcheck = False to prevent error massage on some machines.
+        kt = np.zeros(nt)
+        _calc_kt(kt, A_xy, A_yy_exp, nt, A_list)
+        return kt
 
     return func
 
@@ -264,6 +472,142 @@ def make_dosz_function_k(dim):
     return func
 
 
+def _mat_to_param(mat):
+    """Translates an unrestrained drift matrix to list of parameters"""
+    dim = len(mat)
+    param = []
+    for i in range(1, dim):
+        param.append(mat[0][i])
+        for j in range(i, dim):
+            param.append(mat[i][j])
+    return np.array(param)
+
+
+# Kind of dubious, if matrix was not originally built as dosz. One should be carful using this.
+def _mat_to_param_dosz(A):
+    dim = len(A)
+    n_osc = (dim - 1) // 2
+    params = []
+    for i in range(n_osc):
+        params.append(A[1 + i * 2, 1 + i * 2])
+        params.append(A[0, 1 + i * 2])
+        params.append(A[0, 2 + i * 2])
+        params.append(
+            np.sqrt(
+                0.25
+                * ((2 * A[1 + i * 2, 2 + i * 2]) ** 2 - A[1 + i * 2, 1 + i * 2] ** 2)
+            )
+        )
+    return np.array(params)
+
+
+def _mat_to_param_block(mat):
+    dim = len(mat)
+    params = []
+    assert (dim - 1) % 2 == 0.0
+    n_blocks = (dim - 1) // 2
+    for i in range(n_blocks):
+        params.append(mat[0][1 + i * 2])
+        params.append(mat[0][2 + i * 2])
+        params.append(mat[1 + i * 2][1 + i * 2])
+        params.append(mat[1 + i * 2][2 + i * 2])
+    return np.array(params)
+
+
+def _mat_to_param_block2(mat):
+    dim = len(mat)
+    params = []
+    assert (dim - 1) % 2 == 0.0
+    n_blocks = (dim - 1) // 2
+    for i in range(n_blocks):
+        params.append(mat[0][1 + i * 2])
+        params.append(mat[0][2 + i * 2])
+        params.append(mat[1 + i * 2][1 + i * 2])
+        params.append(mat[1 + i * 2][2 + i * 2])
+        params.append(mat[2 + i * 2][2 + i * 2])
+    return np.array(params)
+
+
+def write_a_matrix_full(param, amat_file, renorm=[1, 1]):
+    """Write unrestrained drift matrix to file"""
+    n = _get_dim_full(len(param))
+    mat = np.zeros((n, n))
+    p_index = 0
+    for i in range(1, n):
+        mat[0][i] = param[p_index] * np.sqrt(renorm[1] / renorm[0])
+        mat[i][0] = -param[p_index] * np.sqrt(renorm[1] / renorm[0])
+        p_index += 1
+        for j in range(i, n):
+            mat[i][j] = param[p_index] / renorm[0]
+            if i != j:
+                mat[j][i] = -param[p_index] / renorm[0]
+            p_index += 1
+
+    np.savetxt(amat_file, mat)
+    return mat
+
+
+def write_a_matrix_block(param, amat_file, renorm=[1, 1]):
+    """Write unrestrained drift matrix to file"""
+    n = _get_dim_block(len(param))
+    mat = np.zeros((n, n))
+    p_index = 0
+    for i in range((n - 1) // 2):
+        mat[0][1 + i * 2] = param[p_index] * np.sqrt(renorm[1] / renorm[0])
+        mat[1 + i * 2][0] = -param[p_index] * np.sqrt(renorm[1] / renorm[0])
+        p_index += 1
+        mat[0][2 + i * 2] = param[p_index] * np.sqrt(renorm[1] / renorm[0])
+        mat[2 + i * 2][0] = -param[p_index] * np.sqrt(renorm[1] / renorm[0])
+        p_index += 1
+
+        mat[1 + i * 2][1 + i * 2] = param[p_index] / renorm[0]
+
+        p_index += 1
+        mat[1 + i * 2][2 + i * 2] = param[p_index] / renorm[0]
+        mat[2 + i * 2][1 + i * 2] = -param[p_index] / renorm[0]
+        p_index += 1
+        # for j in range(i, n):
+        #     mat[i][j] = param[p_index] / renorm[0]
+        #     if i != j:
+        #         mat[j][i] = -param[p_index] / renorm[0]
+        #     p_index += 1
+
+    np.savetxt(amat_file, mat)
+    return mat
+
+
+def write_a_matrix_block2(param, amat_file, renorm=[1, 1]):
+    """Write unrestrained drift matrix to file"""
+    n = _get_dim_block2(len(param))
+    mat = np.zeros((n, n))
+    p_index = 0
+    for i in range((n - 1) // 2):
+        mat[0][1 + i * 2] = param[p_index] * np.sqrt(renorm[1] / renorm[0])
+        mat[1 + i * 2][0] = -param[p_index] * np.sqrt(renorm[1] / renorm[0])
+        p_index += 1
+        mat[0][2 + i * 2] = param[p_index] * np.sqrt(renorm[1] / renorm[0])
+        mat[2 + i * 2][0] = -param[p_index] * np.sqrt(renorm[1] / renorm[0])
+        p_index += 1
+
+        mat[1 + i * 2][1 + i * 2] = param[p_index] / renorm[0]
+
+        p_index += 1
+        mat[1 + i * 2][2 + i * 2] = param[p_index] / renorm[0]
+        mat[2 + i * 2][1 + i * 2] = -param[p_index] / renorm[0]
+        p_index += 1
+        mat[2 + i * 2][2 + i * 2] = param[p_index] / renorm[0]
+
+        p_index += 1
+        # for j in range(i, n):
+        #     mat[i][j] = param[p_index] / renorm[0]
+        #     if i != j:
+        #         mat[j][i] = -param[p_index] / renorm[0]
+        #     p_index += 1
+
+    np.savetxt(amat_file, mat)
+    return mat
+
+
 """param <-----> mat"""
 
 
@@ -294,51 +638,49 @@ def _param_to_mat(param):
     return mat
 
 
-def _mat_to_param(mat):
-    """Translates an unrestrained drift matrix to list of parameters"""
-    dim = len(mat)
-    param = []
-    for i in range(1, dim):
-        param.append(mat[0][i])
-        for j in range(i, dim):
-            param.append(mat[i][j])
-    return np.array(param)
-
-
-# Kind of dubious, if matrix was not originally built as dosz. One should be carful using this.
-def _mat_to_param_dosz(A):
-    dim = len(A)
-    n_osc = (dim - 1) // 2
-    params = []
-    for i in range(n_osc):
-        params.append(A[1 + i * 2, 1 + i * 2])
-        params.append(A[0, 1 + i * 2])
-        params.append(A[0, 2 + i * 2])
-        params.append(
-            np.sqrt(
-                0.25
-                * ((2 * A[1 + i * 2, 2 + i * 2]) ** 2 - A[1 + i * 2, 1 + i * 2] ** 2)
-            )
-        )
-    return np.array(params)
-
-
-def write_a_matrix_full(param, amat_file, renorm=[1, 1]):
-    """Write unrestrained drift matrix to file"""
-    n = _get_dim_full(len(param))
-    mat = np.zeros((n, n))
+def _param_to_mat_block(param):
+    dim = _get_dim_block(len(param))
+    mat = np.zeros((dim, dim))
+    assert (dim - 1) % 2 == 0
+    n_block = (dim - 1) // 2
     p_index = 0
-    for i in range(1, n):
-        mat[0][i] = param[p_index] * np.sqrt(renorm[1] / renorm[0])
-        mat[i][0] = -param[p_index] * np.sqrt(renorm[1] / renorm[0])
+    for i in range(n_block):
+        mat[0, 1 + i * 2] = param[p_index]
+        mat[1 + i * 2, 0] = -param[p_index]
         p_index += 1
-        for j in range(i, n):
-            mat[i][j] = param[p_index] / renorm[0]
-            if i != j:
-                mat[j][i] = -param[p_index] / renorm[0]
-            p_index += 1
+        mat[0, 2 + i * 2] = param[p_index]
+        mat[2 + i * 2, 0] = -param[p_index]
+        p_index += 1
+        mat[1 + i * 2, 1 + i * 2] = param[p_index]
+        p_index += 1
+        mat[1 + i * 2, 2 + i * 2] = param[p_index]
+        mat[2 + i * 2, 1 + i * 2] = -param[p_index]
+        p_index += 1
+    assert p_index == len(param)
+    return mat
 
-    np.savetxt(amat_file, mat)
+
+def _param_to_mat_block2(param):
+    dim = _get_dim_block2(len(param))
+    mat = np.zeros((dim, dim))
+    assert (dim - 1) % 2 == 0
+    n_block = (dim - 1) // 2
+    p_index = 0
+    for i in range(n_block):
+        mat[0, 1 + i * 2] = param[p_index]
+        mat[1 + i * 2, 0] = -param[p_index]
+        p_index += 1
+        mat[0, 2 + i * 2] = param[p_index]
+        mat[2 + i * 2, 0] = -param[p_index]
+        p_index += 1
+        mat[1 + i * 2, 1 + i * 2] = param[p_index]
+        p_index += 1
+        mat[1 + i * 2, 2 + i * 2] = param[p_index]
+        mat[2 + i * 2, 1 + i * 2] = -param[p_index]
+        p_index += 1
+        mat[2 + i * 2, 2 + i * 2] = param[p_index]
+        p_index += 1
+    assert p_index == len(param)
     return mat
 
 

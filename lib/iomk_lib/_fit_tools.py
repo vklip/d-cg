@@ -7,6 +7,10 @@ from iomk_lib._tools import (
     make_a_mat_function_k,
     make_dosz_function,
     make_dosz_function_k,
+    make_block_function,
+    make_block_function_k,
+    make_block2_function,
+    make_block2_function_k,
     normalize_g,
     normalize_k,
     _mat_to_param,
@@ -16,14 +20,26 @@ from iomk_lib._tools import (
     write_a_matrix_full,
     write_a_matrix_dosz,
     _dosz_normal_to_param,
+    _mat_to_param_block,
+    _param_to_mat_block,
+    _get_dim_block,
+    write_a_matrix_block,
+    _mat_to_param_block2,
+    _param_to_mat_block2,
+    _get_dim_block2,
+    write_a_matrix_block2,
 )
 
 
 __all__ = [
     "_apply_mat_constraints",
     "_apply_dosz_constraints",
+    "_apply_block_constraints",
+    "_apply_block2_constraints",
     "_guess_mat",
     "_guess_mat_dosz",
+    "_guess_mat_block",
+    "_guess_mat_block2",
     "reg_adaptive",
     "reg_tikhonov",
     "_reg_methods",
@@ -112,6 +128,132 @@ def _apply_mat_constraints(param, n, step=[], off_diag=1e-5, diag=2):
         return temp_param
 
 
+def _apply_block_constraints(param, n, step=[], off_diag=1e-5, diag=2):
+    """_summary_
+
+    Args:
+        param (iterable): _description_
+        n (integer): _description_
+        step (list, optional): _description_. Defaults to [].
+        off_diag (float, optional): _description_. Defaults to 1e-5.
+        diag (int, optional): _description_. Defaults to 2.
+
+    Returns:
+        _type_: _description_
+    """
+    if len(step) == 0:
+        temp_param = param[:]
+        p_index = 0
+        for i in range((n - 1) // 2):
+            if temp_param[p_index] < off_diag:
+                temp_param[p_index] = off_diag
+
+            p_index += 1
+            if temp_param[p_index] < off_diag:
+                temp_param[p_index] = off_diag
+
+            p_index += 1
+            if temp_param[p_index] < diag:
+                temp_param[p_index] = diag
+
+            p_index += 1
+            if temp_param[p_index] < off_diag:
+                temp_param[p_index] = off_diag
+
+            p_index += 1
+
+        return temp_param
+    else:
+        temp_param = param[:] - step
+        p_index = 0
+        for i in range((n - 1) // 2):
+            if temp_param[p_index] < off_diag:
+                temp_param[p_index] = off_diag
+
+            p_index += 1
+            if temp_param[p_index] < off_diag:
+                temp_param[p_index] = off_diag
+
+            p_index += 1
+            if temp_param[p_index] < diag:
+                temp_param[p_index] = diag
+
+            p_index += 1
+            if temp_param[p_index] < off_diag:
+                temp_param[p_index] = off_diag
+
+            p_index += 1
+
+        return temp_param
+
+
+def _apply_block2_constraints(param, n, step=[], off_diag=1e-5, diag=2):
+    """_summary_
+
+    Args:
+        param (iterable): _description_
+        n (integer): _description_
+        step (list, optional): _description_. Defaults to [].
+        off_diag (float, optional): _description_. Defaults to 1e-5.
+        diag (int, optional): _description_. Defaults to 2.
+
+    Returns:
+        _type_: _description_
+    """
+    if len(step) == 0:
+        temp_param = param[:]
+        p_index = 0
+        for i in range((n - 1) // 2):
+            if temp_param[p_index] < off_diag:
+                temp_param[p_index] = off_diag
+
+            p_index += 1
+            if temp_param[p_index] < off_diag:
+                temp_param[p_index] = off_diag
+
+            p_index += 1
+            if temp_param[p_index] < diag:
+                temp_param[p_index] = diag
+
+            p_index += 1
+            if temp_param[p_index] < off_diag:
+                temp_param[p_index] = off_diag
+
+            p_index += 1
+            if temp_param[p_index] < diag:
+                temp_param[p_index] = diag
+
+            p_index += 1
+
+        return temp_param
+    else:
+        temp_param = param[:] - step
+        p_index = 0
+        for i in range((n - 1) // 2):
+            if temp_param[p_index] < off_diag:
+                temp_param[p_index] = off_diag
+
+            p_index += 1
+            if temp_param[p_index] < off_diag:
+                temp_param[p_index] = off_diag
+
+            p_index += 1
+            if temp_param[p_index] < diag:
+                temp_param[p_index] = diag
+
+            p_index += 1
+            if temp_param[p_index] < off_diag:
+                temp_param[p_index] = off_diag
+
+            p_index += 1
+            if temp_param[p_index] < diag:
+                temp_param[p_index] = diag
+
+            p_index += 1
+
+        return temp_param
+
+
 # from _tools import (_dosz_normal_to_param,)
 """ Different functions to determine regularization """
 
@@ -172,6 +314,83 @@ def _guess_mat(dim, nframes, min_diag=2, max_diag_scale=0.1):
     return _apply_mat_constraints(p_guess, dim)
 
 
+def _guess_mat_block(dim, nframes, min_diag=2, max_diag_scale=0.1):
+    """Generates initial guess of a drift matrix of given dimensionality dim for
+    the optimization of a normalized integrated memory kernel.
+    The the A_ps and the diagonal elements of A_ss are chosen such that with zeros in the off diagonal elements
+    the total integral of the memory kernel would be one. The off diagonal entries are then set to be non-zero.
+    The diagonal elements are logarithmically equidistantly spaced within the bounds.
+
+
+    Args:
+        dim (_type_): dimension of drift matrix (dim x dim)
+        nframes (_type_): Number of (equidistant) frames in memory kernel.
+        min_diag (int, optional): Lower bounds of diagonal elements. Defaults to 2.
+        max_diag_scale (float, optional): Determines the upper bounds of the diagonal elements as nframes*max_diag_scale. Defaults to 0.1.
+
+    Returns:
+        _type_: _description_
+    """
+    print(dim)
+    p_guess = np.zeros((dim - 1) // 2 * 4)
+    p_index = 0
+    part_g = 1.0 / (0.5 * (dim - 1))
+    max_diag = max_diag_scale * nframes
+    diag = np.logspace(np.log10(min_diag), np.log10(max_diag), num=(dim - 1) // 2)
+    for i in range(0, (dim - 1) // 2):
+        p_guess[p_index] = np.sqrt(0.5 * part_g * diag[i])
+        p_index += 1
+        p_guess[p_index] = np.sqrt(0.5 * part_g * diag[i])
+        p_index += 1
+        p_guess[p_index] = 2 * diag[i]
+        p_index += 1
+        p_guess[p_index] = diag[i]
+        p_index += 1
+
+    return _apply_block_constraints(p_guess, dim)
+
+
+def _guess_mat_block2(dim, nframes, min_diag=2, max_diag_scale=0.1):
+    """Generates initial guess of a drift matrix of given dimensionality dim for
+    the optimization of a normalized integrated memory kernel.
+    The the A_ps and the diagonal elements of A_ss are chosen such that with zeros in the off diagonal elements
+    the total integral of the memory kernel would be one. The off diagonal entries are then set to be non-zero.
+    The diagonal elements are logarithmically equidistantly spaced within the bounds.
+
+
+    Args:
+        dim (_type_): dimension of drift matrix (dim x dim)
+        nframes (_type_): Number of (equidistant) frames in memory kernel.
+        min_diag (int, optional): Lower bounds of diagonal elements. Defaults to 2.
+        max_diag_scale (float, optional): Determines the upper bounds of the diagonal elements as nframes*max_diag_scale. Defaults to 0.1.
+
+    Returns:
+        _type_: _description_
+    """
+    print(dim)
+    p_guess = np.zeros((dim - 1) // 2 * 5)
+    p_index = 0
+    # part_g = 1.0 / (0.5 * (dim - 1))
+    # max_diag = max_diag_scale * nframes
+    # diag = np.logspace(np.log10(min_diag), np.log10(max_diag), num=(dim - 1) // 2)
+    part_g = 1.0 / (dim - 1)
+    max_diag = max_diag_scale * nframes
+    diag = np.logspace(np.log10(min_diag), np.log10(max_diag), num=dim - 1)
+    for i in range(0, (dim - 1) // 2):
+        p_guess[p_index] = np.sqrt(part_g * diag[i * 2])
+        p_index += 1
+        p_guess[p_index] = np.sqrt(part_g * diag[i * 2 + 1])
+        p_index += 1
+        p_guess[p_index] = diag[i * 2]
+        p_index += 1
+        p_guess[p_index] = diag[i * 2]
+        p_index += 1
+        p_guess[p_index] = diag[i * 2 + 1]
+        p_index += 1
+
+    return _apply_block2_constraints(p_guess, dim)
+
+
 def _guess_mat_dosz(dim, nframes, min_diag=2, max_diag_scale=0.1):
     """ """
     p_guess = np.zeros((dim - 1) // 2 * 4)
@@ -211,6 +430,17 @@ _target_type_methods_dosz = {
     "K": [make_dosz_function_k, normalize_k],
 }
 
+_target_type_methods_block = {
+    "G": [make_block_function, normalize_g],
+    "K": [make_block_function_k, normalize_k],
+}
+
+
+_target_type_methods_block2 = {
+    "G": [make_block2_function, normalize_g],
+    "K": [make_block2_function_k, normalize_k],
+}
+
 _wrapped_methods = {
     "full_matrix": {
         "mat_to_param": _mat_to_param,
@@ -229,5 +459,23 @@ _wrapped_methods = {
         "get_dim": _get_dim_dosz,
         "constraints": _apply_dosz_constraints,
         "write_a_matrix": write_a_matrix_dosz,
+    },
+    "block": {
+        "mat_to_param": _mat_to_param_block,
+        "param_to_mat": _param_to_mat_block,
+        "guess_mat": _guess_mat_block,
+        "target_type_methods": _target_type_methods_block,
+        "get_dim": _get_dim_block,
+        "constraints": _apply_block_constraints,
+        "write_a_matrix": write_a_matrix_block,
+    },
+    "block2": {
+        "mat_to_param": _mat_to_param_block2,
+        "param_to_mat": _param_to_mat_block2,
+        "guess_mat": _guess_mat_block2,
+        "target_type_methods": _target_type_methods_block2,
+        "get_dim": _get_dim_block2,
+        "constraints": _apply_block2_constraints,
+        "write_a_matrix": write_a_matrix_block2,
     },
 }

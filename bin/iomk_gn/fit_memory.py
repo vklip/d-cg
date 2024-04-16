@@ -109,14 +109,16 @@ def _main(args):
     # Unwrap configuration to kwargs
     fit_kwargs = {}
     add_to_kwargs(fit_kwargs, config.get("general"))
-    add_to_kwargs(fit_kwargs, config.get("jac"))
+    # add_to_kwargs(fit_kwargs, config.get("jac"))
     add_to_kwargs(fit_kwargs, config.get("fit"))
     add_to_kwargs(fit_kwargs, config.get("fit").get("GN"))
     add_to_kwargs(fit_kwargs, config.get("fit").get("GN").get("kwargs"))
     add_to_kwargs(fit_kwargs, config.get("fit").get("scipy"))
     add_to_kwargs(fit_kwargs, config.get("fit").get("scipy").get("kwargs"))
-    results, target_norm, func, write_a_matrix, get_dim = fit.fit(**fit_kwargs)
-
+    results, target_norm, func, write_a_matrix, get_dim = fit.fit(
+        **fit_kwargs, jac_kwargs=config.get("jac")
+    )
+    jac_kwargs = config.get("jac")
     # unwrapping all output data to handle writing
     renorm = target_norm[1]
     target_norm = target_norm[0]
